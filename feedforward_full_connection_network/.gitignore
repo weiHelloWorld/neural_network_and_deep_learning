@@ -1,2 +1,3 @@
 *.ipynb  
 mnist.pkl.gz
+*.pyc
