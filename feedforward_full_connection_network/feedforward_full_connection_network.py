@@ -1,25 +1,20 @@
 import cPickle, gzip, numpy as np, copy, random
 
-# Load the dataset
-f = gzip.open('mnist.pkl.gz', 'rb')
-train_set, valid_set, test_set = cPickle.load(f)
-f.close()
+def log_likelihood_der(expected, actual):
+    return - expected / actual
 
-
-train_input = train_set[0]
-num_of_data = train_input.shape[0]
-train_output = np.zeros((num_of_data, 10))
-for item in range(num_of_data):
-    train_output[item][train_set[1][item]] = 1
-
+def mse_der(expected, actual):
+    return (actual - expected)
 
 class network(object):
     def __init__(self, learning_rate, num_of_nodes, input_data, output_data, 
+                 cost_func_der,     # derivation of cost function 
                  connection_list = None, 
                  layer_list=None
                  ):
         self._learning_rate = learning_rate
         self._num_of_nodes = num_of_nodes
+        self._cost_func_der = cost_func_der
         self._in_data_list = list(range(len(num_of_nodes)))
         self._out_data_list = list(range(len(num_of_nodes)))
         self._in_err_list = list(range(len(num_of_nodes)))
@@ -46,7 +41,7 @@ class network(object):
     
     def backward(self, single_output):
         last_index = len(self._num_of_nodes) - 1
-        self._out_err_list[last_index] = self._out_data_list[last_index] - single_output
+        self._out_err_list[last_index] = self._cost_func_der(single_output, self._out_data_list[last_index])
         for item in reversed(range(len(self._connection_list))):
             self._in_err_list[item + 1] = self._layer_list[item].backward(self._out_data_list[item + 1], self._out_err_list[item + 1])
             self._out_err_list[item] = self._connection_list[item].backward(self._in_err_list[item + 1])
@@ -78,7 +73,7 @@ class network(object):
             self.backward(item[1])
             self._out_data_list_list.append(copy.deepcopy(self._out_data_list))
             self._in_err_list_list.append(copy.deepcopy(self._in_err_list))
-            if _1 % batch_size == 0:     
+            if (_1 + 1) % batch_size == 0:     
                 self.update_coeff_and_bias_and_clear_history()
 
         return
@@ -128,3 +123,23 @@ class linear_layer(object):
     def backward(self, out_data, out_err):
         return out_err
 
+class relu_layer(object):
+    def forward(self, in_data):
+        return np.maximum(in_data, np.zeros((1, in_data.shape[0]))).flatten()
+
+    def backward(self, out_data, out_err):
+        return (out_data > 0).astype(int) * out_err
+
+class softmax_layer(object):
+    def forward(self, in_data):
+        temp_max = max(in_data)
+        in_data -= temp_max   # avoid overflow
+        exp_sum = sum(np.exp(in_data))
+        return np.exp(in_data) / exp_sum
+
+    def backward(self, out_data, out_err):
+        jacobian = - np.outer(out_data, out_data)
+        for _1 in range(out_data.shape[0]):
+            jacobian[_1][_1] += out_data[_1]
+
+        return np.dot(jacobian, out_err)

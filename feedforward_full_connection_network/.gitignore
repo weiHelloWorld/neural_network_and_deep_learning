@@ -1,3 +1,6 @@
 *.ipynb  
 mnist.pkl.gz
 *.pyc
+*.txt
+*.md
+*.png
